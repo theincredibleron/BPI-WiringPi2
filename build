@@ -155,7 +155,7 @@ fi
   echo
   echo "GPIO Utility"
   cd ../gpio
-  make -j5
+  make -j5 PREFIX=
   check_make_ok
   $sudo make install
   check_make_ok
