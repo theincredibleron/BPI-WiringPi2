@@ -104,7 +104,18 @@ int wiringPiSPISetupMode (int channel, int speed, int mode)
   mode    &= 3 ;	// Mode is 0, 1, 2 or 3
   channel &= 1 ;	// Channel is 0 or 1
 
+#ifdef BPI
+  int rev;
+  const char *device;
+  
+  rev = piGpioLayout();
+  if(bpi_wiringPiSetupSPI(rev, &device) < 0)
+	return wiringPiFailure (WPI_ALMOST, "BPI, NO SPI device defined %s\n", strerror (errno)) ;
+
+  if ((fd = open (device, O_RDWR)) < 0)
+#else
   if ((fd = open (channel == 0 ? spiDev0 : spiDev1, O_RDWR)) < 0)
+#endif
     return wiringPiFailure (WPI_ALMOST, "Unable to open SPI device: %s\n", strerror (errno)) ;
 
   spiSpeeds [channel] = speed ;

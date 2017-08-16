@@ -56,7 +56,7 @@ extern void doPins       (void) ;
 #endif
 
 #define	PI_USB_POWER_CONTROL	38
-#define	I2CDETECT		"/usr/sbin/i2cdetect"
+#define	I2CDETECT		"i2cdetect"
 #define	MODPROBE		"/sbin/modprobe"
 #define	RMMOD			"/sbin/rmmod"
 

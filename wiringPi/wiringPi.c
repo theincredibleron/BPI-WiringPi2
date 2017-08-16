@@ -2325,7 +2325,7 @@ int wiringPiSetup (void)
 #ifdef BPI
   if(bpi_found == 1) {
     bpi_wiringPiSetup();
-    return;
+    return 0;
   }
 #endif
 

@@ -32,6 +32,8 @@
 #define PULLDOWN        6
 #define PULLOFF         7
 
+#define BPI_MODEL_MIN   21
+
 // Function prototypes
 //	c++ wrappers thanks to a comment by Nick Lott
 //	(and others on the Raspberry Pi forums)
@@ -44,6 +46,10 @@ extern "C" {
 
 extern int  bpi_wiringPiSetup       (void) ;
 extern int  bpi_wiringPiSetupSys    (void) ;
+extern int  bpi_wiringPiSetupI2C    (int board_model, const char **device);
+extern int  bpi_wiringPiSetupSPI    (int board_model, const char **device);
+extern int  bpi_piGpioLayout        (void);
+extern void bpi_piBoardId           (int *model, int *rev, int *mem, int *maker, int *warranty);
 
 extern          void bpi_pinModeAlt          (int pin, int mode) ;
 extern          void bpi_pinMode             (int pin, int mode) ;

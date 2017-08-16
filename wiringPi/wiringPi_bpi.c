@@ -194,6 +194,7 @@ static int BP_PIN_MASK[14][32] =  //[BANK]  [INDEX]
 //static int version=0;
 static int pwmmode=0;
 
+static int bpi_wiringPiSetupRegOffset(int mode);
 
 /**
  *A20 Tools for Banana Pi 
@@ -657,6 +658,7 @@ void sunxi_set_pin_mode(int pin,int mode)
   int index = pin - (bank << 5);
   int offset = ((index - ((index >> 3) << 3)) << 2);
   uint32_t phyaddr=0;
+  int reg_offset;
 
   /* for M2 PM and PL */
   if(bank == 11)
@@ -700,9 +702,15 @@ void sunxi_set_pin_mode(int pin,int mode)
     } 
     else if(PWM_OUTPUT == mode)
     {
+      reg_offset = bpi_wiringPiSetupRegOffset(mode);
+        if(reg_offset < 0){
+	  printf("reg offset not defined\n");
+	  return;
+      }
+
       //set pin PWMx to pwm mode
       regval &= ~(7 << offset);
-      regval |=  (0x3 << offset);
+      regval |=  (reg_offset << offset);
 	  
       if (wiringPiDebug)
         printf(">>>>>line:%d PWM mode ready to set val: 0x%x\n",__LINE__,regval);
@@ -719,9 +727,15 @@ void sunxi_set_pin_mode(int pin,int mode)
     }
 	else if(I2C_PIN == mode)
     {
+      reg_offset = bpi_wiringPiSetupRegOffset(mode);
+        if(reg_offset < 0){
+          printf("reg offset not defined\n");
+          return;
+      }
+
       //set pin to i2c mode
       regval &= ~(7 << offset);
-      regval |=  (0x2 << offset);
+      regval |=  (reg_offset << offset);
 
       sunxi_gpio_writel(regval, phyaddr, bank);
       delayMicroseconds (200);
@@ -732,9 +746,15 @@ void sunxi_set_pin_mode(int pin,int mode)
     }
 	else if(SPI_PIN == mode)
     {
+      reg_offset = bpi_wiringPiSetupRegOffset(mode);
+        if(reg_offset < 0){
+          printf("reg offset not defined\n");
+          return;
+      }
+
       //set pin to spi mode
       regval &= ~(7 << offset);
-      regval |=  (0x3 << offset);
+      regval |=  (reg_offset << offset);
 
       sunxi_gpio_writel(regval, phyaddr, bank);
       delayMicroseconds (200);
@@ -889,7 +909,7 @@ void sunxi_pullUpDnControl (int pin, int pud)
 
 int bpi_getAlt (int pin)
 {
-  int fSel, shift, alt ;
+  int alt ;
 
   pin &= 63 ;
 
@@ -902,7 +922,8 @@ int bpi_getAlt (int pin)
   else return 0 ;
 		
   if(-1 == pin) {
-    printf("[%s:L%d] the pin:%d is invaild,please check it over!\n", __func__,  __LINE__, pin);
+    if (wiringPiDebug)
+      printf("[%s:L%d] the pin:%d is invaild,please check it over!\n", __func__,  __LINE__, pin);
     return -1;
   }
   alt=sunxi_get_pin_mode(pin);
@@ -934,6 +955,8 @@ void bpi_pwmSetClock (int divisor)
 
 void bpi_gpioClockSet (int pin, int freq)
 {
+  if(wiringPiDebug)
+    printf("clock set pin:%d freq:%d\n", pin, freq);
   return;
 }
 
@@ -969,7 +992,6 @@ void sunxi_set_pin_alt(int pin, int mode)
 
 void bpi_pinModeAlt (int pin, int mode)
 {
-  int fSel, shift ;
   int origPin = pin ;
 
   if ((pin & PI_GPIO_MASK) == 0)    // On-board pin
@@ -999,7 +1021,6 @@ void bpi_pinModeAlt (int pin, int mode)
 
 void bpi_pinMode (int pin, int mode)
 {
-  int    fSel, shift, alt ;
   struct wiringPiNodeStruct *node = wiringPiNodes ;
   int origPin = pin ;
  
@@ -1135,12 +1156,14 @@ int bpi_digitalRead (int pin)
     {
       if(pin==0)
       {
-        printf("%d %s,%d invalid pin,please check it over.\n",pin,__func__, __LINE__);
+	if (wiringPiDebug)
+          printf("%d %s,%d invalid pin,please check it over.\n",pin,__func__, __LINE__);
         return 0;
       }
       if(syspin[pin]==-1)
       {
-        printf("%d %s,%d invalid pin,please check it over.\n",pin,__func__, __LINE__);
+        if (wiringPiDebug)
+          printf("%d %s,%d invalid pin,please check it over.\n",pin,__func__, __LINE__);
         return 0;
       }
       if (sysFds [pin] == -1)
@@ -1164,7 +1187,8 @@ int bpi_digitalRead (int pin)
     else 
       return LOW ;
     if(-1 == pin){
-      printf("[%s:L%d] the pin:%d is invaild,please check it over!\n", __func__,  __LINE__, pin);
+      if (wiringPiDebug)
+        printf("[%s:L%d] the pin:%d is invaild,please check it over!\n", __func__,  __LINE__, pin);
       return LOW;
     }
     return sunxi_digitalRead(pin);
@@ -1270,7 +1294,7 @@ void bpi_pwmWrite (int pin, int value)
     a_val = sunxi_pwm_get_period();
     if (wiringPiDebug)
       printf("==> no:%d period now is :%d,act_val to be set:%d\n",__LINE__,a_val, value);
-    if(value > a_val){
+    if((uint32_t)value > a_val){
       printf("val pwmWrite 0 <= X <= 1024\n");
       printf("Or you can set new range by yourself by pwmSetRange(range\n");
       return;
@@ -1295,6 +1319,12 @@ void bpi_pwmWrite (int pin, int value)
   return;
 }
 
+struct RegOffset
+{
+  int pwm_offset;
+  int i2c_offset;
+  int spi_offset;
+};
 
 struct BPIBoards
 {
@@ -1308,6 +1338,9 @@ struct BPIBoards
   int *pinToGpio;
   int *physToGpio;
   int *pinTobcm;
+  const char *i2c_dev;
+  const char *spi_dev;
+  struct RegOffset reg_offset;
 } ;
 
 /*
@@ -1317,40 +1350,40 @@ struct BPIBoards
 
 struct BPIBoards bpiboard [] = 
 {
-  { "bpi-0",	      -1, 0, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-1",	      -1, 1, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-2",	      -1, 2, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-3",	      -1, 3, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-4",	      -1, 4, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-5",	      -1, 5, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-6",	      -1, 6, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-7",	      -1, 7, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-8",	      -1, 8, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-9",	      -1, 9, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-10",	      -1, 10, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-11",	      -1, 11, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-12",	      -1, 12, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-13",	      -1, 13, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-14",	      -1, 14, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-15",	      -1, 15, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-new",	      -1, 16, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-x86",	      -1, 17, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-rpi",	      -1, 18, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-rpi2",	      -1, 19, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-rpi3",	      -1, 20, 1, 2, 5, 0, NULL, NULL, NULL 	},
-  { "bpi-m1",	   10001, 21, 1, 2, 5, 0, pinToGpio_BPI_M1P, physToGpio_BPI_M1P, pinTobcm_BPI_M1P 	},
-  { "bpi-m1p",	   10001, 22, 1, 2, 5, 0, pinToGpio_BPI_M1P, physToGpio_BPI_M1P, pinTobcm_BPI_M1P 	},
-  { "bpi-r1",	   10001, 23, 1, 2, 5, 0, pinToGpio_BPI_M1P, physToGpio_BPI_M1P, pinTobcm_BPI_M1P 	},
-  { "bpi-m2",	   10101, 24, 1, 2, 5, 0, pinToGpio_BPI_M2, physToGpio_BPI_M2, pinTobcm_BPI_M2 	},
-  { "bpi-m3",	   10201, 25, 1, 3, 5, 0, pinToGpio_BPI_M3, physToGpio_BPI_M3, pinTobcm_BPI_M3 	},
-  { "bpi-m2p",	   10301, 26, 1, 2, 5, 0, pinToGpio_BPI_M2P, physToGpio_BPI_M2P, pinTobcm_BPI_M2P 	},
-  { "bpi-m64",	   10401, 27, 1, 3, 5, 0, pinToGpio_BPI_M64, physToGpio_BPI_M64, pinTobcm_BPI_M64 	},
-  { "bpi-m2u",	   10501, 28, 1, 3, 5, 0, pinToGpio_BPI_M2U, physToGpio_BPI_M2U, pinTobcm_BPI_M2U 	},
-  { "bpi-m2m",	   10601, 29, 1, 1, 5, 0, pinToGpio_BPI_M2M, physToGpio_BPI_M2M, pinTobcm_BPI_M2M 	},
-  { "bpi-m2p_H2+", 10701, 30, 1, 2, 5, 0, pinToGpio_BPI_M2P, physToGpio_BPI_M2P, pinTobcm_BPI_M2P 	},
-  { "bpi-m2p_H5",  10801, 31, 1, 2, 5, 0, pinToGpio_BPI_M2P, physToGpio_BPI_M2P, pinTobcm_BPI_M2P 	},
-  { "bpi-m2u_V40", 10901, 32, 1, 3, 5, 0, pinToGpio_BPI_M2U, physToGpio_BPI_M2U, pinTobcm_BPI_M2U 	},
-  { NULL,		0, 0, 1, 2, 5, 0, NULL, NULL, NULL 	},
+  { "bpi-0",	      -1, 0, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-1",	      -1, 1, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-2",	      -1, 2, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-3",	      -1, 3, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-4",	      -1, 4, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-5",	      -1, 5, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-6",	      -1, 6, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-7",	      -1, 7, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-8",	      -1, 8, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-9",	      -1, 9, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-10",	      -1, 10, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-11",	      -1, 11, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-12",	      -1, 12, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-13",	      -1, 13, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-14",	      -1, 14, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-15",	      -1, 15, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-new",	      -1, 16, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-x86",	      -1, 17, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-rpi",	      -1, 18, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-rpi2",	      -1, 19, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-rpi3",	      -1, 20, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
+  { "bpi-m1",	   10001, 21, 1, 2, 5, 0, pinToGpio_BPI_M1P, physToGpio_BPI_M1P, pinTobcm_BPI_M1P, M1P_I2C_DEV, M1P_SPI_DEV, {M1P_PWM_OFFSET,M1P_I2C_OFFSET,M1P_SPI_OFFSET} },
+  { "bpi-m1p",	   10001, 22, 1, 2, 5, 0, pinToGpio_BPI_M1P, physToGpio_BPI_M1P, pinTobcm_BPI_M1P, M1P_I2C_DEV, M1P_SPI_DEV, {M1P_PWM_OFFSET,M1P_I2C_OFFSET,M1P_SPI_OFFSET} },
+  { "bpi-r1",	   10001, 23, 1, 2, 5, 0, pinToGpio_BPI_M1P, physToGpio_BPI_M1P, pinTobcm_BPI_M1P, M1P_I2C_DEV, M1P_SPI_DEV, {M1P_PWM_OFFSET,M1P_I2C_OFFSET,M1P_SPI_OFFSET} },
+  { "bpi-m2",	   10101, 24, 1, 2, 5, 0, pinToGpio_BPI_M2, physToGpio_BPI_M2, pinTobcm_BPI_M2, M2_I2C_DEV, M2_SPI_DEV, {M2_PWM_OFFSET,M2_I2C_OFFSET,M2_SPI_OFFSET} },
+  { "bpi-m3",	   10201, 25, 1, 3, 5, 0, pinToGpio_BPI_M3, physToGpio_BPI_M3, pinTobcm_BPI_M3, M3_I2C_DEV, M3_SPI_DEV, {M3_PWM_OFFSET,M3_I2C_OFFSET,M3_SPI_OFFSET} },
+  { "bpi-m2p",	   10301, 26, 1, 2, 5, 0, pinToGpio_BPI_M2P, physToGpio_BPI_M2P, pinTobcm_BPI_M2P, M2P_I2C_DEV, M2P_SPI_DEV, {M2P_PWM_OFFSET,M2P_I2C_OFFSET,M2P_SPI_OFFSET} },
+  { "bpi-m64",	   10401, 27, 1, 3, 5, 0, pinToGpio_BPI_M64, physToGpio_BPI_M64, pinTobcm_BPI_M64, M64_I2C_DEV, M64_SPI_DEV, {M64_PWM_OFFSET,M64_I2C_OFFSET,M64_SPI_OFFSET} },
+  { "bpi-m2u",	   10501, 28, 1, 3, 5, 0, pinToGpio_BPI_M2U, physToGpio_BPI_M2U, pinTobcm_BPI_M2U, M2U_I2C_DEV, M2U_SPI_DEV, {M2U_PWM_OFFSET,M2U_I2C_OFFSET,M2U_SPI_OFFSET} },
+  { "bpi-m2m",	   10601, 29, 1, 1, 5, 0, pinToGpio_BPI_M2M, physToGpio_BPI_M2M, pinTobcm_BPI_M2M, M2M_I2C_DEV, M2M_SPI_DEV, {M2M_PWM_OFFSET,M2M_I2C_OFFSET,M2M_SPI_OFFSET} },
+  { "bpi-m2p_H2+", 10701, 30, 1, 2, 5, 0, pinToGpio_BPI_M2P, physToGpio_BPI_M2P, pinTobcm_BPI_M2P, M2P_I2C_DEV, M2P_SPI_DEV, {M2P_PWM_OFFSET,M2P_I2C_OFFSET,M2P_SPI_OFFSET} },
+  { "bpi-m2p_H5",  10801, 31, 1, 2, 5, 0, pinToGpio_BPI_M2P, physToGpio_BPI_M2P, pinTobcm_BPI_M2P, M2P_I2C_DEV, M2P_SPI_DEV, {M2P_PWM_OFFSET,M2P_I2C_OFFSET,M2P_SPI_OFFSET} },
+  { "bpi-m2u_V40", 10901, 32, 1, 3, 5, 0, pinToGpio_BPI_M2U, physToGpio_BPI_M2U, pinTobcm_BPI_M2U, M2U_I2C_DEV, M2U_SPI_DEV, {M2U_PWM_OFFSET,M2U_I2C_OFFSET,M2U_SPI_OFFSET} },
+  { NULL,		0, 0, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
 } ;
 
 extern int bpi_found;
@@ -1491,4 +1524,51 @@ int bpi_wiringPiSetup (void)
   return 0 ;
 }
 
+int bpi_wiringPiSetupI2C (int board_model, const char **device)
+{
+  struct BPIBoards *board;
+
+  for (board = bpiboard ; board->name != NULL ; ++board) {
+    if (board->model == board_model) {
+      *device = board->i2c_dev; 
+      return 0;
+    }
+  }
+
+  return -1;
+}
+
+int bpi_wiringPiSetupSPI (int board_model, const char **device)
+{
+	struct BPIBoards *board;
+
+	for (board = bpiboard ; board->name != NULL ; ++board) {
+      if (board->model == board_model) {
+        *device = board->spi_dev; 
+	return 0;
+      }
+    }
+
+	return -1;
+}
+
+static int bpi_wiringPiSetupRegOffset(int mode)
+{
+  struct BPIBoards *board;
+  int board_model;
+	
+  board_model = piGpioLayout () ;
+  for (board = bpiboard ; board->name != NULL ; ++board) {
+    if (board->model == board_model) {
+	  if(mode == PWM_OUTPUT)
+	   return board->reg_offset.pwm_offset;
+	  else if(mode == I2C_PIN)
+	  	return board->reg_offset.i2c_offset;
+	  else if(mode == SPI_PIN)
+	  	return board->reg_offset.spi_offset;
+    }
+  }
+
+  return -1;
+}
 #endif /* BPI */

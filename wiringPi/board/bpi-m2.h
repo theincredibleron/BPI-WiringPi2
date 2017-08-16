@@ -41,7 +41,7 @@
 #define	BPI_M2_40	GPIO_PM02
 
 //map wpi gpio_num(index) to bp bpio_num(element)
-const int pinToGpio_BPI_M2 [64] =
+int pinToGpio_BPI_M2 [64] =
 {
    BPI_M2_11, BPI_M2_12,        //0, 1
    BPI_M2_13, BPI_M2_15,        //2, 3
@@ -64,7 +64,7 @@ const int pinToGpio_BPI_M2 [64] =
 } ;
 
 //map bcm gpio_num(index) to bp gpio_num(element)
-const int pinTobcm_BPI_M2 [64] =
+int pinTobcm_BPI_M2 [64] =
 {
   BPI_M2_27, BPI_M2_28,  //0, 1
   BPI_M2_03, BPI_M2_05,  //2, 3
@@ -87,7 +87,7 @@ const int pinTobcm_BPI_M2 [64] =
 } ;
 
 //map phys_num(index) to bp gpio_num(element)
-const int physToGpio_BPI_M2 [64] =
+int physToGpio_BPI_M2 [64] =
 {
           -1,                //0
           -1,        -1,     //1, 2
@@ -113,3 +113,10 @@ const int physToGpio_BPI_M2 [64] =
    -1,   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //41-> 55
    -1,   -1, -1, -1, -1, -1, -1, -1 // 56-> 63
 } ;
+
+#define M2_I2C_DEV             "/dev/i2c-2"
+#define M2_SPI_DEV             "/dev/spidev1.0"
+
+#define M2_I2C_OFFSET  2
+#define M2_SPI_OFFSET  2
+#define M2_PWM_OFFSET  4
