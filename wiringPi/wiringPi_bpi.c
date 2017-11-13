@@ -1383,6 +1383,7 @@ struct BPIBoards bpiboard [] =
   { "bpi-m2p_H2+", 10701, 30, 1, 2, 5, 0, pinToGpio_BPI_M2P, physToGpio_BPI_M2P, pinTobcm_BPI_M2P, M2P_I2C_DEV, M2P_SPI_DEV, {M2P_PWM_OFFSET,M2P_I2C_OFFSET,M2P_SPI_OFFSET} },
   { "bpi-m2p_H5",  10801, 31, 1, 2, 5, 0, pinToGpio_BPI_M2P, physToGpio_BPI_M2P, pinTobcm_BPI_M2P, M2P_I2C_DEV, M2P_SPI_DEV, {M2P_PWM_OFFSET,M2P_I2C_OFFSET,M2P_SPI_OFFSET} },
   { "bpi-m2u_V40", 10901, 32, 1, 3, 5, 0, pinToGpio_BPI_M2U, physToGpio_BPI_M2U, pinTobcm_BPI_M2U, M2U_I2C_DEV, M2U_SPI_DEV, {M2U_PWM_OFFSET,M2U_I2C_OFFSET,M2U_SPI_OFFSET} },
+  { "bpi-m2z",	   11001, 33, 1, 1, 5, 0, pinToGpio_BPI_M2P, physToGpio_BPI_M2P, pinTobcm_BPI_M2P, M2P_I2C_DEV, M2P_SPI_DEV, {M2P_PWM_OFFSET,M2P_I2C_OFFSET,M2P_SPI_OFFSET} },
   { NULL,		0, 0, 1, 2, 5, 0, NULL, NULL, NULL, NULL, NULL, {-1, -1, -1} },
 } ;
 
