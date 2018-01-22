@@ -23,6 +23,9 @@ gpio pin 224, aka GPIO5).
 How to determine the right gpio pin?
 ------------------------------------
 
+*;tldr: After compiling this library you can certainly use `gpio readall` and get the gpio pin number from the 'BCM' column. But if you are
+interested in the hard way...go on;)*
+
 The most annoying thing if you a getting such a raspi clone, finding the right pins.
 At first you have to understand the terminology and to differentiate socket-pin, gpio pin, pin name and pin function. 
 A pin on the socket of your BananaPi has 
