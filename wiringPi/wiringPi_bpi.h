@@ -76,7 +76,6 @@ extern          void bpi_digitalWriteByte2   (int value) ;
 
 // Interrupts
 //	(Also Pi hardware specific)
-
 extern int  bpi_wiringPiISR         (int pin, int mode, void (*function)(void)) ;
 
 #ifdef __cplusplus

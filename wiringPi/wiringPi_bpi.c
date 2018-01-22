@@ -106,6 +106,9 @@ int *pinToGpio_BP ;
 int *physToGpio_BP ;
 int *pinTobcm_BP ;
 
+static volatile int    pinPass = -1 ;
+static pthread_mutex_t pinMutex ;
+
 // Add for Banana Pi
 /* for mmap bananapi */
 #define	MAX_PIN_NUM		      (0x40)  //64
@@ -151,6 +154,9 @@ int *pinTobcm_BP ;
 
 static int wiringPinMode = WPI_MODE_UNINITIALISED ;
 
+// ISR Data
+
+static void (*isrFunctions [64])(void) ;
 
 static int syspin [64] =
 {
@@ -195,6 +201,19 @@ static int BP_PIN_MASK[14][32] =  //[BANK]  [INDEX]
 static int pwmmode=0;
 
 static int bpi_wiringPiSetupRegOffset(int mode);
+
+static void wiringPiMessage (const char *message, ...)
+{
+  va_list argp ;
+  char buffer [1024] ;
+
+  va_start (argp, message) ;
+    vsnprintf (buffer, 1023, message, argp) ;
+  va_end (argp) ;
+
+  fprintf (stdout, "%s", buffer) ;
+}
+
 
 /**
  *A20 Tools for Banana Pi 
@@ -1572,4 +1591,119 @@ static int bpi_wiringPiSetupRegOffset(int mode)
 
   return -1;
 }
+/*
+ * interruptHandler:
+ *	This is a thread and gets started to wait for the interrupt we're
+ *	hoping to catch. It will call the user-function when the interrupt
+ *	fires.
+ *********************************************************************************
+*/
+static void *interruptHandler (UNU void *arg)
+{
+  int myPin ;
+
+  (void)piHiPri (55) ;	// Only effective if we run as root
+
+  myPin   = pinPass ;
+  pinPass = -1 ;
+
+  for (;;)
+    if (waitForInterrupt (myPin, -1) > 0)
+      isrFunctions [myPin] () ;
+
+  return NULL ;
+}
+
+int bpi_wiringPiISR (int pin, int mode, void (*function)(void))
+{
+  pthread_t threadId ;
+  const char *modeS ;
+  char fName   [64] ;
+  char  pinS [8] ;
+  pid_t pid ;
+  int   count, i ;
+  char  c ;
+  int   bcmGpioPin ;
+  
+  if ((pin < 0) || (pin > 63))
+    return wiringPiFailure (WPI_FATAL, "bpi_wiringPiISR: pin must be 0-63 (%d)\n", pin) ;
+
+    /* doit the banana pi way */ 
+    if (wiringPiMode == WPI_MODE_UNINITIALISED)
+      return wiringPiFailure (WPI_FATAL, "bpi_wiringPiISR: wiringPi has not been initialised. Unable to continue.\n") ;
+    else if (wiringPiMode == WPI_MODE_PINS)
+      bcmGpioPin = pinToGpio_BPI_M2U [pin] ;
+    else if (wiringPiMode == WPI_MODE_PHYS)
+      bcmGpioPin = physToGpio_BPI_M2U [pin] ;
+    else
+      bcmGpioPin = pin ;
+// wiringPiMessage("bpi_wiringPiISR: pin = %d, bcmGpioPin = %d, mode = %d, wiringPiMode = %d\n", pin, bcmGpioPin, mode, wiringPiMode);
+// Now export the pin and set the right edge
+//	We're going to use the gpio program to do this, so it assumes
+//	a full installation of wiringPi. It's a bit 'clunky', but it
+//	is a way that will work when we're running in "Sys" mode, as
+//	a non-root user. (without sudo)
+
+  if (mode != INT_EDGE_SETUP)
+  {
+    /**/ if (mode == INT_EDGE_FALLING)
+      modeS = "falling" ;
+    else if (mode == INT_EDGE_RISING)
+      modeS = "rising" ;
+    else
+      modeS = "both" ;
+
+    sprintf (pinS, "%d", bcmGpioPin) ;
+
+    if ((pid = fork ()) < 0)	// Fail
+      return wiringPiFailure (WPI_FATAL, "bpi_wiringPiISR: fork failed: %s\n", strerror (errno)) ;
+
+    if (pid == 0)	// Child, exec
+    {
+      /**/ if (access ("/usr/local/bin/gpio", X_OK) == 0)
+      {
+	execl ("/usr/local/bin/gpio", "gpio", "edge", pinS, modeS, (char *)NULL) ;
+	return wiringPiFailure (WPI_FATAL, "bpi_wiringPiISR: execl failed: %s\n", strerror (errno)) ;
+      }
+      else if (access ("/usr/bin/gpio", X_OK) == 0)
+      {
+	execl ("/usr/bin/gpio", "gpio", "edge", pinS, modeS, (char *)NULL) ;
+	return wiringPiFailure (WPI_FATAL, "bpi_wiringPiISR: execl failed: %s\n", strerror (errno)) ;
+      }
+      else
+	return wiringPiFailure (WPI_FATAL, "bpi_wiringPiISR: Can't find gpio program\n") ;
+    }
+    else		// Parent, wait
+      wait (NULL) ;
+  }
+
+// Now pre-open the /sys/class node - but it may already be open if
+//	we are in Sys mode...
+
+  if (sysFds [bcmGpioPin] == -1)
+  {
+    sprintf (fName, "/sys/class/gpio/gpio%d/value", bcmGpioPin) ;
+    if ((sysFds [bcmGpioPin] = open (fName, O_RDWR)) < 0)
+      return wiringPiFailure (WPI_FATAL, "bpi_wiringPiISR: unable to open %s: %s\n", fName, strerror (errno)) ;
+  }
+
+// Clear any initial pending interrupt
+
+  ioctl (sysFds [bcmGpioPin], FIONREAD, &count) ;
+  for (i = 0 ; i < count ; ++i)
+    read (sysFds [bcmGpioPin], &c, 1) ;
+
+  isrFunctions [pin] = function ;
+
+  pthread_mutex_lock (&pinMutex) ;
+    pinPass = pin ;
+    pthread_create (&threadId, NULL, interruptHandler, NULL) ;
+    while (pinPass != -1)
+      delay (1) ;
+  pthread_mutex_unlock (&pinMutex) ;
+
+  return 0 ;
+}
+
+
 #endif /* BPI */

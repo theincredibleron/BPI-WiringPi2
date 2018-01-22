@@ -2029,9 +2029,10 @@ int wiringPiISR (int pin, int mode, void (*function)(void))
 
 #ifdef BPI
   if(bpi_found == 1) {
-    return wiringPiFailure (WPI_FATAL, "wiringPiISR: wait for support (%d)\n", pin) ;
+    return bpi_wiringPiISR(pin, mode, function);
   }
 #endif
+
   if ((pin < 0) || (pin > 63))
     return wiringPiFailure (WPI_FATAL, "wiringPiISR: pin must be 0-63 (%d)\n", pin) ;
 
